@@ -1,0 +1,2598 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Prumo Estratégico — IA para Decoradores (Protótipo)</title>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,500;0,600;0,700;1,400&family=Inter:wght@300;400;500;600;700&display=swap">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/basecoat-css@1.0.2/dist/basecoat.cdn.min.css">
+  <style>
+/* Skip artifact shell — fixed styles served beside every artifact.
+   Complements basecoat; artifacts override --accent for their own identity. */
+:root {
+  color-scheme: light dark;
+  --accent: #2563eb;
+  --accent-contrast: #ffffff;
+  --accent-text: color-mix(in srgb, var(--accent) 72%, #000);
+  --bg: #f8f9fb;
+  --surface: #ffffff;
+  --text: #14171f;
+  --text-muted: #5b6472;
+  --border: rgba(20, 23, 31, 0.10);
+  --radius: 10px;
+  --shadow: 0 1px 3px rgba(20, 23, 31, 0.08);
+  --space: 16px;
+}
+/* Theme resolution. Without data-theme the viewer's system preference decides,
+   as it always did. With it, the artifact's own choice wins in BOTH directions:
+   a page that hardcodes one palette must not be handed the opposite set of
+   tokens by the machine it happens to be opened on. The dark values appear
+   twice because a media query cannot be folded into a selector list.
+   The attribute sits inside :where() so these blocks keep the specificity of a
+   bare :root — the page's own <style> is linked after this file and must go on
+   overriding any token it wants, exactly as it could before. */
+@media (prefers-color-scheme: dark) {
+  :root:where(:not([data-theme="light"])) {
+    --accent-text: color-mix(in srgb, var(--accent) 78%, #fff);
+    --bg: #101318;
+    --surface: #181c23;
+    --text: #eef1f6;
+    --text-muted: #9aa4b2;
+    --border: rgba(238, 241, 246, 0.12);
+    --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+  }
+}
+:root:where([data-theme="dark"]) {
+  color-scheme: dark;
+  --accent-text: color-mix(in srgb, var(--accent) 78%, #fff);
+  --bg: #101318;
+  --surface: #181c23;
+  --text: #eef1f6;
+  --text-muted: #9aa4b2;
+  --border: rgba(238, 241, 246, 0.12);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+:root:where([data-theme="light"]) { color-scheme: light; }
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--bg);
+  color: var(--text);
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.55;
+  -webkit-font-smoothing: antialiased;
+}
+img { max-width: 100%; display: block; }
+
+.shell-container { max-width: 1100px; margin: 0 auto; padding: 0 20px; }
+.shell-section { padding: calc(var(--space) * 2) 0; }
+.shell-grid { display: grid; gap: var(--space); grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+.shell-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; margin-bottom: var(--space); }
+.shell-footer { padding: 24px 0 40px; color: var(--text-muted); font-size: 13px; }
+
+.shell-hero { padding: calc(var(--space) * 3) 0 calc(var(--space) * 2); }
+.shell-hero h1 { font-size: clamp(26px, 4vw, 40px); line-height: 1.15; margin: 0 0 10px; text-wrap: balance; }
+.shell-hero p { color: var(--text-muted); max-width: 60ch; margin: 0; }
+
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: var(--space);
+}
+
+.kpi { display: flex; flex-direction: column; gap: 4px; }
+.kpi .kpi-value { font-size: 28px; font-weight: 650; line-height: 1.1; }
+.kpi .kpi-label { font-size: 13px; color: var(--text-muted); }
+.kpi .kpi-delta { font-size: 12.5px; font-weight: 600; }
+.kpi .kpi-delta.up { color: #0a8f3c; }
+.kpi .kpi-delta.down { color: #cf3131; }
+
+table.shell-table { border-collapse: collapse; width: 100%; font-size: 14px; }
+table.shell-table th {
+  text-align: left; font-size: 11.5px; letter-spacing: 0.05em; text-transform: uppercase;
+  color: var(--text-muted); font-weight: 600;
+}
+table.shell-table th, table.shell-table td { padding: 9px 12px 9px 0; border-bottom: 1px solid var(--border); }
+table.shell-table td.num, table.shell-table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+table.shell-table tbody tr:hover { background: color-mix(in srgb, var(--accent) 6%, transparent); }
+
+.chart-box { width: 100%; min-height: 220px; }
+.chart-box svg { width: 100%; height: auto; display: block; }
+
+.muted { color: var(--text-muted); }
+.accent { color: var(--accent-text); }
+.shell-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 12%, transparent); color: var(--accent-text);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .shell-fade { animation: shell-fade 400ms ease both; }
+  @keyframes shell-fade { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+}
+
+</style>
+  
+  <style>
+    :root {
+      --accent: #D4AF37;
+      --accent-text: #F3DE8A;
+      --accent-contrast: #0A1320;
+      --bg-deep: #0A1422;
+      --bg-panel: #112138;
+      --bg-card: #162A47;
+      --bg-card-hover: #1B3356;
+      --gold-gradient: linear-gradient(135deg, #F3DE8A 0%, #D4AF37 50%, #AA8220 100%);
+      --gold-border: rgba(212, 175, 55, 0.35);
+      --gold-glow: rgba(212, 175, 55, 0.15);
+      --text-main: #F4F7FC;
+      --text-soft: #A3B8D4;
+      --border-subtle: rgba(255, 255, 255, 0.08);
+      --font-serif: 'Cormorant Garamond', Georgia, serif;
+      --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    body {
+      background-color: var(--bg-deep);
+      background-image: 
+        radial-gradient(circle at 50% 0%, rgba(21, 44, 76, 0.7) 0%, transparent 65%),
+        radial-gradient(circle at 100% 100%, rgba(17, 33, 56, 0.8) 0%, transparent 50%),
+        repeating-linear-gradient(45deg, rgba(255, 255, 255, 0.007) 0px, rgba(255, 255, 255, 0.007) 1px, transparent 1px, transparent 14px);
+      color: var(--text-main);
+      font-family: var(--font-sans);
+      min-height: 100vh;
+      overflow-x: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Top Discrete Pill */
+    .prototype-pill {
+      position: fixed;
+      top: 10px;
+      right: 12px;
+      z-index: 1000;
+      background: rgba(14, 27, 46, 0.85);
+      backdrop-filter: blur(8px);
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      color: #E6CE78;
+      font-size: 0.68rem;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    }
+    .prototype-pill-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #D4AF37;
+      box-shadow: 0 0 6px #D4AF37;
+      animation: pulse 2.5s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.4; transform: scale(0.85); }
+    }
+
+    /* Container */
+    .app-wrapper {
+      max-width: 640px;
+      margin: 0 auto;
+      width: 100%;
+      padding: 24px 16px 40px;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* Logo & Header */
+    .brand-header {
+      text-align: center;
+      margin-top: 12px;
+      margin-bottom: 24px;
+      cursor: pointer;
+    }
+    .brand-feather-svg {
+      width: 68px;
+      height: 68px;
+      margin: 0 auto 8px;
+      filter: drop-shadow(0 4px 14px rgba(212, 175, 55, 0.28));
+      transition: transform 0.3s ease;
+    }
+    .brand-header:hover .brand-feather-svg {
+      transform: translateY(-2px) scale(1.02);
+    }
+    .brand-title {
+      font-family: var(--font-serif);
+      font-size: 1.35rem;
+      font-weight: 600;
+      letter-spacing: 0.22em;
+      color: #F7E7A9;
+      text-transform: uppercase;
+      margin-bottom: 2px;
+    }
+    .brand-subtitle {
+      font-size: 0.72rem;
+      text-transform: uppercase;
+      letter-spacing: 0.18em;
+      color: var(--text-soft);
+    }
+
+    /* Stage highlight box */
+    .stage-box {
+      background: linear-gradient(90deg, rgba(212, 175, 55, 0.12) 0%, rgba(212, 175, 55, 0.05) 100%);
+      border-left: 3px solid #D4AF37;
+      border-radius: 6px;
+      padding: 9px 12px;
+      margin-bottom: 16px;
+      font-size: 0.8rem;
+      line-height: 1.35;
+      color: #F0F3F8;
+    }
+    .stage-box strong {
+      color: #F5E296;
+      font-weight: 600;
+      display: inline;
+      margin-right: 4px;
+    }
+
+    /* Step Navigation Bar */
+    .step-nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+      gap: 8px;
+    }
+    .btn-back {
+      background: rgba(255, 255, 255, 0.06);
+      border: 1px solid var(--border-subtle);
+      color: var(--text-soft);
+      font-size: 0.78rem;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .btn-back:hover {
+      background: rgba(212, 175, 55, 0.15);
+      color: #FFF;
+      border-color: rgba(212, 175, 55, 0.4);
+    }
+    .step-indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .step-dot {
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      font-size: 0.7rem;
+      font-weight: 600;
+      color: var(--text-soft);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 0.25s ease;
+    }
+    .step-dot.active {
+      background: var(--gold-gradient);
+      color: #0A1320;
+      border-color: #D4AF37;
+      font-weight: 700;
+      box-shadow: 0 0 10px rgba(212, 175, 55, 0.4);
+    }
+    .step-dot.completed {
+      background: rgba(212, 175, 55, 0.2);
+      border-color: #D4AF37;
+      color: #F5E296;
+    }
+
+    /* Screen management */
+    .screen {
+      display: none;
+      animation: fadeIn 0.3s ease-out;
+    }
+    .screen.active {
+      display: block;
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* Opening Screen */
+    .hero-lead {
+      text-align: center;
+      font-family: var(--font-serif);
+      font-size: 1.65rem;
+      font-weight: 600;
+      color: #FFFFFF;
+      margin-bottom: 24px;
+      line-height: 1.25;
+    }
+    .hero-cards-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 16px;
+      margin-bottom: 22px;
+    }
+    @media (min-width: 520px) {
+      .hero-cards-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    .hero-card {
+      background: linear-gradient(160deg, #162B4A 0%, #101F35 100%);
+      border: 1px solid rgba(212, 175, 55, 0.3);
+      border-radius: 12px;
+      padding: 22px 18px;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.28s ease;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      min-height: 165px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.28);
+    }
+    .hero-card::after {
+      content: '';
+      position: absolute;
+      top: 0; right: 0; width: 60px; height: 60px;
+      background: radial-gradient(circle at top right, rgba(212, 175, 55, 0.2), transparent 70%);
+      pointer-events: none;
+    }
+    .hero-card:hover {
+      transform: translateY(-3px);
+      border-color: rgba(212, 175, 55, 0.7);
+      box-shadow: 0 12px 28px rgba(0, 0, 0, 0.45), 0 0 16px rgba(212, 175, 55, 0.18);
+    }
+    .hero-card-num {
+      font-size: 0.72rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: #E2C366;
+      font-weight: 600;
+      margin-bottom: 8px;
+    }
+    .hero-card-title {
+      font-family: var(--font-serif);
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: #FFF;
+      line-height: 1.25;
+      margin-bottom: 8px;
+    }
+    .hero-card-desc {
+      font-size: 0.82rem;
+      line-height: 1.35;
+      color: var(--text-soft);
+      margin-bottom: 12px;
+    }
+    .hero-card-action {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 0.76rem;
+      font-weight: 600;
+      color: #F7E7A9;
+    }
+    .hero-hint {
+      text-align: center;
+      font-size: 0.8rem;
+      color: var(--text-soft);
+      opacity: 0.85;
+      letter-spacing: 0.02em;
+    }
+
+    /* Chat Components */
+    .chat-container {
+      background: #112138;
+      border: 1px solid var(--border-subtle);
+      border-radius: 12px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      height: 440px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+    }
+    .chat-header {
+      background: #0E1A2C;
+      padding: 12px 14px;
+      border-bottom: 1px solid var(--border-subtle);
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .chat-avatar {
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      background: var(--gold-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #0E1A2C;
+      font-weight: 700;
+      font-size: 0.85rem;
+    }
+    .chat-header-text h4 {
+      font-size: 0.86rem;
+      font-weight: 600;
+      color: #FFF;
+      line-height: 1.2;
+    }
+    .chat-header-text p {
+      font-size: 0.7rem;
+      color: #79DC96;
+    }
+    .chat-messages {
+      flex: 1;
+      padding: 14px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      background: #0D1929;
+    }
+    .chat-bubble {
+      max-width: 86%;
+      padding: 10px 13px;
+      border-radius: 12px;
+      font-size: 0.84rem;
+      line-height: 1.4;
+      animation: msgPop 0.25s ease-out;
+    }
+    @keyframes msgPop {
+      from { opacity: 0; transform: scale(0.96); }
+      to { opacity: 1; transform: scale(1); }
+    }
+    .chat-bubble.ai {
+      background: #162842;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      color: #EBF1FA;
+      align-self: flex-start;
+      border-bottom-left-radius: 2px;
+    }
+    .chat-bubble.user {
+      background: linear-gradient(135deg, #A88120 0%, #D4AF37 100%);
+      color: #0E1A2C;
+      font-weight: 500;
+      align-self: flex-end;
+      border-bottom-right-radius: 2px;
+    }
+    .chat-quick-replies {
+      padding: 8px 12px;
+      background: #101F35;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 6px;
+      max-height: 110px;
+      overflow-y: auto;
+    }
+    .quick-chip {
+      background: rgba(212, 175, 55, 0.12);
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      color: #F8E7AB;
+      font-size: 0.74rem;
+      padding: 5px 10px;
+      border-radius: 20px;
+      cursor: pointer;
+      transition: all 0.2s ease;
+      white-space: nowrap;
+    }
+    .quick-chip:hover {
+      background: rgba(212, 175, 55, 0.28);
+      color: #FFF;
+      border-color: #D4AF37;
+    }
+    .chat-input-bar {
+      padding: 10px 12px;
+      background: #0E1A2C;
+      border-top: 1px solid var(--border-subtle);
+      display: flex;
+      gap: 8px;
+    }
+    .chat-input {
+      flex: 1;
+      background: #16263D;
+      border: 1px solid rgba(255, 255, 255, 0.12);
+      border-radius: 8px;
+      color: #FFF;
+      font-size: 0.82rem;
+      padding: 8px 12px;
+      outline: none;
+      font-family: inherit;
+    }
+    .chat-input:focus {
+      border-color: #D4AF37;
+    }
+    .chat-send-btn {
+      background: var(--gold-gradient);
+      color: #0E1A2C;
+      border: none;
+      border-radius: 8px;
+      padding: 0 14px;
+      font-weight: 600;
+      font-size: 0.82rem;
+      cursor: pointer;
+    }
+
+    /* Structured Dossier (Passo B) */
+    .dossier-card {
+      background: #112239;
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      border-radius: 12px;
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4);
+      position: relative;
+    }
+    .dossier-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid rgba(212, 175, 55, 0.2);
+      padding-bottom: 12px;
+      margin-bottom: 14px;
+    }
+    .dossier-protocol {
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      color: #E5C365;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+    .dossier-db-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.68rem;
+      padding: 3px 8px;
+      border-radius: 4px;
+      background: rgba(46, 204, 113, 0.14);
+      border: 1px solid rgba(46, 204, 113, 0.35);
+      color: #48E084;
+      font-weight: 500;
+    }
+    .dossier-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 480px) {
+      .dossier-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+    .dossier-item {
+      background: rgba(255, 255, 255, 0.025);
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      border-radius: 6px;
+      padding: 8px 10px;
+    }
+    .dossier-item.full-width {
+      grid-column: 1 / -1;
+    }
+    .dossier-label {
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      color: var(--text-soft);
+      margin-bottom: 2px;
+    }
+    .dossier-val {
+      font-size: 0.85rem;
+      color: #FFF;
+      font-weight: 500;
+    }
+
+    /* WhatsApp Mock (Passo C) */
+    .wa-mock {
+      background: #0B141A;
+      border-radius: 14px;
+      overflow: hidden;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45);
+    }
+    .wa-top-bar {
+      background: #1F2C34;
+      padding: 10px 14px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    .wa-avatar {
+      width: 34px;
+      height: 34px;
+      border-radius: 50%;
+      background: #128C7E;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #FFF;
+      font-size: 0.8rem;
+      font-weight: 700;
+    }
+    .wa-name {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #E9EDEF;
+    }
+    .wa-status {
+      font-size: 0.68rem;
+      color: #8696A0;
+    }
+    .wa-chat-area {
+      padding: 14px;
+      background-color: #0B141A;
+      background-image: radial-gradient(rgba(255, 255, 255, 0.03) 1px, transparent 1px);
+      background-size: 16px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 290px;
+    }
+    .wa-msg {
+      max-width: 82%;
+      padding: 8px 12px;
+      border-radius: 8px;
+      font-size: 0.8rem;
+      line-height: 1.35;
+      position: relative;
+    }
+    .wa-msg.system {
+      background: #005C4B;
+      color: #E9EDEF;
+      align-self: flex-start;
+      border-top-left-radius: 0;
+    }
+    .wa-msg.client {
+      background: #202C33;
+      color: #E9EDEF;
+      align-self: flex-end;
+      border-top-right-radius: 0;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+    }
+    .wa-time {
+      font-size: 0.62rem;
+      color: rgba(255, 255, 255, 0.6);
+      text-align: right;
+      margin-top: 4px;
+    }
+
+    /* Decorator Dashboard (Passo D) */
+    .dashboard-panel {
+      background: #112138;
+      border: 1px solid rgba(212, 175, 55, 0.25);
+      border-radius: 12px;
+      padding: 18px;
+    }
+    .lead-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+      margin-bottom: 14px;
+    }
+    .lead-status-pill {
+      background: rgba(46, 204, 113, 0.15);
+      color: #44DE80;
+      border: 1px solid rgba(46, 204, 113, 0.35);
+      font-size: 0.72rem;
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-weight: 600;
+    }
+    .action-cta-btn {
+      width: 100%;
+      background: var(--gold-gradient);
+      color: #0A1320;
+      border: none;
+      padding: 13px 18px;
+      border-radius: 8px;
+      font-size: 0.9rem;
+      font-weight: 700;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      box-shadow: 0 4px 16px rgba(212, 175, 55, 0.28);
+      transition: all 0.2s ease;
+      text-decoration: none;
+    }
+    .action-cta-btn:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 22px rgba(212, 175, 55, 0.42);
+    }
+
+    /* BEFORE / AFTER SLIDER (Oportunidade 2) */
+    .slider-stage {
+      position: relative;
+      width: 100%;
+      height: 340px;
+      border-radius: 12px;
+      overflow: hidden;
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+      user-select: none;
+      touch-action: pan-y;
+      cursor: ew-resize;
+      background: #09111C;
+    }
+    .slider-pane {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+    }
+    .slider-pane.before-pane {
+      z-index: 1;
+    }
+    .slider-pane.after-pane {
+      z-index: 2;
+      overflow: hidden;
+      width: 50%; /* driven by JS */
+      border-right: 2px solid #D4AF37;
+      box-shadow: 2px 0 14px rgba(212, 175, 55, 0.5);
+    }
+    .pane-svg-wrapper {
+      position: absolute;
+      top: 0; left: 0;
+      width: 100%;
+      height: 100%;
+    }
+    /* When inside clipped after-pane, we fix its full width so the drawing stays mapped */
+    .slider-pane.after-pane .pane-svg-wrapper {
+      width: 100%;
+      min-width: 100%;
+    }
+    .slider-tag {
+      position: absolute;
+      bottom: 12px;
+      z-index: 5;
+      font-size: 0.68rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-weight: 700;
+      padding: 3px 8px;
+      border-radius: 4px;
+      pointer-events: none;
+    }
+    .slider-tag.tag-before {
+      right: 12px;
+      background: rgba(15, 23, 36, 0.85);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #9BAEC8;
+    }
+    .slider-tag.tag-after {
+      left: 12px;
+      background: rgba(212, 175, 55, 0.85);
+      color: #0A1320;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+    }
+    .slider-handle {
+      position: absolute;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--gold-gradient);
+      border: 2px solid #FFF;
+      box-shadow: 0 2px 14px rgba(0, 0, 0, 0.7), 0 0 12px rgba(212, 175, 55, 0.6);
+      z-index: 10;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #0A1320;
+    }
+    .slider-handle svg {
+      width: 16px;
+      height: 16px;
+    }
+    .click-zoom-hint {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      z-index: 8;
+      background: rgba(14, 27, 46, 0.85);
+      border: 1px solid rgba(212, 175, 55, 0.35);
+      color: #F7E7A9;
+      font-size: 0.68rem;
+      padding: 4px 8px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      cursor: pointer;
+      backdrop-filter: blur(4px);
+    }
+
+    /* Tokens Control Panel */
+    .token-panel {
+      background: #112138;
+      border: 1px solid rgba(212, 175, 55, 0.3);
+      border-radius: 12px;
+      padding: 14px 16px;
+      margin-top: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .token-bar {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .token-balance-box {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .token-coin-icon {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--gold-gradient);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      color: #0E1A2C;
+      font-weight: 800;
+      font-size: 0.75rem;
+    }
+    .token-count {
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #FFF;
+      display: inline-flex;
+      align-items: baseline;
+      gap: 4px;
+    }
+    .token-count span {
+      font-size: 0.75rem;
+      color: var(--text-soft);
+      font-weight: 400;
+    }
+    .token-actions {
+      display: flex;
+      gap: 8px;
+    }
+    .btn-recharge {
+      background: transparent;
+      border: 1px solid rgba(212, 175, 55, 0.4);
+      color: #E2C366;
+      font-size: 0.76rem;
+      padding: 7px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 600;
+    }
+    .btn-recharge:hover {
+      background: rgba(212, 175, 55, 0.12);
+    }
+    .btn-generate {
+      background: var(--gold-gradient);
+      color: #0A1320;
+      border: none;
+      font-size: 0.78rem;
+      padding: 7px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-weight: 700;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+    .btn-generate:hover {
+      filter: brightness(1.1);
+    }
+    .token-feedback {
+      font-size: 0.75rem;
+      color: #E2C366;
+      display: none;
+      text-align: center;
+      padding: 4px;
+      background: rgba(212, 175, 55, 0.08);
+      border-radius: 4px;
+    }
+
+    /* Lightbox Modal */
+    .lightbox-modal {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(7, 13, 22, 0.94);
+      backdrop-filter: blur(8px);
+      z-index: 2000;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .lightbox-modal.active {
+      display: flex;
+    }
+    .lightbox-content {
+      position: relative;
+      max-width: 580px;
+      width: 100%;
+      background: #112138;
+      border: 1px solid rgba(212, 175, 55, 0.4);
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 16px 48px rgba(0, 0, 0, 0.7);
+    }
+    .lightbox-view {
+      position: relative;
+      width: 100%;
+      height: 360px;
+      background: #09121E;
+    }
+    .lightbox-watermark {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      pointer-events: none;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transform: rotate(-25deg);
+      font-family: var(--font-serif);
+      font-size: 2.1rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      font-weight: 700;
+      color: rgba(212, 175, 55, 0.35);
+      text-shadow: 0 0 12px rgba(212, 175, 55, 0.2);
+    }
+    .lightbox-close {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.6);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      color: #FFF;
+      width: 32px;
+      height: 32px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      z-index: 20;
+    }
+
+    /* Recharge modal */
+    .recharge-modal {
+      position: fixed;
+      top: 0; left: 0; width: 100%; height: 100%;
+      background: rgba(7, 13, 22, 0.85);
+      backdrop-filter: blur(6px);
+      z-index: 2100;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    .recharge-modal.active {
+      display: flex;
+    }
+    .recharge-box {
+      background: #112138;
+      border: 1px solid #D4AF37;
+      border-radius: 12px;
+      padding: 24px;
+      max-width: 400px;
+      width: 100%;
+      text-align: center;
+      box-shadow: 0 12px 36px rgba(0, 0, 0, 0.6);
+    }
+
+    /* Final Screen Closing */
+    .final-grid {
+      display: grid;
+      grid-template-columns: 1fr;
+      gap: 14px;
+      margin-bottom: 24px;
+    }
+    @media (min-width: 520px) {
+      .final-grid {
+        grid-template-columns: 1fr 1fr;
+      }
+    }
+    .final-card {
+      background: #12223A;
+      border: 1px solid rgba(212, 175, 55, 0.25);
+      border-radius: 10px;
+      padding: 18px 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .final-card h3 {
+      font-family: var(--font-serif);
+      font-size: 1.15rem;
+      color: #FFF;
+      margin-bottom: 6px;
+    }
+    .final-card p {
+      font-size: 0.82rem;
+      color: var(--text-soft);
+      line-height: 1.35;
+      margin-bottom: 12px;
+    }
+
+    /* Footer */
+    .footer-note {
+      text-align: center;
+      font-size: 0.72rem;
+      color: var(--text-soft);
+      opacity: 0.7;
+      margin-top: auto;
+      padding-top: 24px;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Top discrete pill -->
+  <div class="prototype-pill">
+    <div class="prototype-pill-dot"></div>
+    <span>Protótipo demonstrativo · IA simulada</span>
+  </div>
+
+  <div class="app-wrapper">
+    <!-- Brand Header -->
+    <header class="brand-header" onclick="goToScreen('screen-home')" title="Voltar ao início">
+      <svg class="brand-feather-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="goldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" stop-color="#FCEBA4"/>
+            <stop offset="40%" stop-color="#D4AF37"/>
+            <stop offset="70%" stop-color="#AA8220"/>
+            <stop offset="100%" stop-color="#6F5012"/>
+          </linearGradient>
+          <linearGradient id="goldGradShine" x1="100%" y1="0%" x2="0%" y2="100%">
+            <stop offset="0%" stop-color="#FFF5C2"/>
+            <stop offset="50%" stop-color="#D4AF37"/>
+            <stop offset="100%" stop-color="#825F18"/>
+          </linearGradient>
+        </defs>
+        <!-- Reticle Circle & Extrapolated Horizontal Lines -->
+        <line x1="2" y1="50" x2="98" y2="50" stroke="url(#goldGrad)" stroke-width="1.2" stroke-dasharray="88 4 4 4" opacity="0.6"/>
+        <line x1="50" y1="6" x2="50" y2="94" stroke="url(#goldGrad)" stroke-width="0.8" opacity="0.35"/>
+        <circle cx="50" cy="50" r="42" stroke="url(#goldGrad)" stroke-width="1.4" fill="none" opacity="0.75"/>
+        <circle cx="50" cy="50" r="38" stroke="url(#goldGrad)" stroke-width="0.7" stroke-dasharray="2 3" fill="none" opacity="0.5"/>
+        <!-- Stylized Faceted Calligraphic Feather / Nib -->
+        <g transform="translate(50, 48) rotate(-35) translate(-50, -50)">
+          <!-- Left Facet -->
+          <path d="M50 16 C48 30 38 46 36 64 C35 72 40 78 50 84 L50 16 Z" fill="url(#goldGradShine)"/>
+          <!-- Right Facet -->
+          <path d="M50 16 C52 30 62 46 64 64 C65 72 60 78 50 84 L50 16 Z" fill="url(#goldGrad)"/>
+          <!-- Central Slit and Breather Hole -->
+          <circle cx="50" cy="48" r="2.2" fill="#0A1422"/>
+          <line x1="50" y1="48" x2="50" y2="84" stroke="#0A1422" stroke-width="1.4"/>
+          <!-- Geometric facets decorative cuts -->
+          <path d="M42 42 L50 48 L44 60" stroke="#FFF5C2" stroke-width="0.8" opacity="0.5" fill="none"/>
+          <path d="M58 42 L50 48 L56 60" stroke="#6F5012" stroke-width="0.8" opacity="0.7" fill="none"/>
+        </g>
+      </svg>
+      <h1 class="brand-title">PRUMO ESTRATÉGICO</h1>
+      <p class="brand-subtitle">Soluções de IA para Eventos</p>
+    </header>
+
+    <!-- ========================================================
+         TELA DE ABERTURA
+         ======================================================== -->
+    <section id="screen-home" class="screen active">
+      <h2 class="hero-lead">Veja sua IA trabalhando agora.</h2>
+      
+      <div class="hero-cards-grid">
+        <div class="hero-card" onclick="startOp1()">
+          <div>
+            <div class="hero-card-num">OPÇÃO 01</div>
+            <h3 class="hero-card-title">1. Pré-atendimento do evento</h3>
+            <p class="hero-card-desc">Cliente responde no chat, você recebe o lead pronto.</p>
+          </div>
+          <div class="hero-card-action">
+            <span>Testar briefing</span> →
+          </div>
+        </div>
+
+        <div class="hero-card" onclick="startOp2()">
+          <div>
+            <div class="hero-card-num">OPÇÃO 02</div>
+            <h3 class="hero-card-title">2. IA com imagens por tokens</h3>
+            <p class="hero-card-desc">A IA mostra o salão decorado antes de montar.</p>
+          </div>
+          <div class="hero-card-action">
+            <span>Ver transformação</span> →
+          </div>
+        </div>
+      </div>
+
+      <p class="hero-hint">Toque em uma opção e teste agora.</p>
+    </section>
+
+    <!-- ========================================================
+         OPORTUNIDADE 1: PRÉ-ATENDIMENTO
+         ======================================================== -->
+    <!-- Passo 1A: Chat simulado -->
+    <section id="screen-op1-a" class="screen">
+      <div class="step-nav">
+        <button class="btn-back" onclick="goToScreen('screen-home')">← Início</button>
+        <div class="step-indicator">
+          <span class="step-dot active">1</span>
+          <span class="step-dot">2</span>
+          <span class="step-dot">3</span>
+          <span class="step-dot">4</span>
+        </div>
+      </div>
+
+      <div class="stage-box">
+        <strong>O que você está vendo:</strong> Cliente respondendo: as respostas viram um dossiê organizado.
+      </div>
+
+      <div class="chat-container">
+        <div class="chat-header">
+          <div class="chat-avatar">IA</div>
+          <div class="chat-header-text">
+            <h4>Assistente do Decorador</h4>
+            <p>● Atendimento online</p>
+          </div>
+        </div>
+        <div id="chat-stream" class="chat-messages">
+          <!-- Messages will append here -->
+        </div>
+        <div id="chat-replies" class="chat-quick-replies">
+          <!-- Quick buttons dynamically loaded -->
+        </div>
+        <form class="chat-input-bar" onsubmit="handleUserSubmit(event)">
+          <input type="text" id="chat-text-input" class="chat-input" placeholder="Digite sua resposta..." autocomplete="off">
+          <button type="submit" class="chat-send-btn">Enviar</button>
+        </form>
+      </div>
+    </section>
+
+    <!-- Passo 1B: Dossiê estruturado -->
+    <section id="screen-op1-b" class="screen">
+      <div class="step-nav">
+        <button class="btn-back" onclick="goToScreen('screen-op1-a')">← Chat</button>
+        <div class="step-indicator">
+          <span class="step-dot completed">1</span>
+          <span class="step-dot active">2</span>
+          <span class="step-dot">3</span>
+          <span class="step-dot">4</span>
+        </div>
+      </div>
+
+      <div class="stage-box">
+        <strong>O que você está vendo:</strong> Você recebe o projeto do evento pronto, sem informação perdida.
+      </div>
+
+      <div class="dossier-card">
+        <div class="dossier-header">
+          <div>
+            <div id="dossier-protocol" class="dossier-protocol">Dossiê Estruturado · Sem protocolo</div>
+            <div style="font-size: 0.95rem; font-weight: 600; color: #FFF; margin-top:2px;">Briefing de Decoração</div>
+          </div>
+          <div id="dossier-badge" class="dossier-db-badge" style="background: rgba(255, 255, 255, 0.08); border-color: rgba(255, 255, 255, 0.15); color: var(--text-soft);">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+            Aguardando pré-atendimento
+          </div>
+        </div>
+
+        <div class="dossier-grid">
+          <div class="dossier-item">
+            <div class="dossier-label">Tipo de Evento</div>
+            <div id="dossier-tipo" class="dossier-val">—</div>
+          </div>
+          <div class="dossier-item">
+            <div class="dossier-label">Data Prevista</div>
+            <div id="dossier-data" class="dossier-val">—</div>
+          </div>
+          <div class="dossier-item">
+            <div class="dossier-label">Local</div>
+            <div id="dossier-local" class="dossier-val">—</div>
+          </div>
+          <div class="dossier-item">
+            <div class="dossier-label">Convidados</div>
+            <div id="dossier-convidados" class="dossier-val">—</div>
+          </div>
+          <div class="dossier-item">
+            <div class="dossier-label">Estilo de Decoração</div>
+            <div id="dossier-estilo" class="dossier-val">—</div>
+          </div>
+          <div class="dossier-item">
+            <div class="dossier-label">Paleta de Cores</div>
+            <div id="dossier-cores" class="dossier-val">—</div>
+          </div>
+          <div class="dossier-item full-width">
+            <div class="dossier-label">Referências Afetivas</div>
+            <div id="dossier-ref" class="dossier-val">—</div>
+          </div>
+          <div class="dossier-item full-width">
+            <div class="dossier-label">Faixa de Investimento Estimada</div>
+            <div id="dossier-inv" class="dossier-val">—</div>
+          </div>
+        </div>
+
+        <div style="margin-top: 18px;">
+          <button class="action-cta-btn" onclick="goToScreen('screen-op1-c')">
+            Ver confirmação no WhatsApp →
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Passo 1C: WhatsApp Mock -->
+    <section id="screen-op1-c" class="screen">
+      <div class="step-nav">
+        <button class="btn-back" onclick="goToScreen('screen-op1-b')">← Ficha</button>
+        <div class="step-indicator">
+          <span class="step-dot completed">1</span>
+          <span class="step-dot completed">2</span>
+          <span class="step-dot active">3</span>
+          <span class="step-dot">4</span>
+        </div>
+      </div>
+
+      <div class="stage-box">
+        <strong>O que você está vendo:</strong> Confirmação automática pelo WhatsApp: informação validada antes de chegar a você.
+      </div>
+
+      <div class="wa-mock">
+        <div class="wa-top-bar">
+          <div class="wa-avatar">PE</div>
+          <div>
+            <div class="wa-name">Ateliê Decoração & IA</div>
+            <div class="wa-status">online</div>
+          </div>
+        </div>
+        <div class="wa-chat-area" id="wa-chat-area">
+          <div class="wa-empty-msg" style="text-align: center; color: #8696A0; font-size: 0.78rem; margin: auto; padding: 24px 16px;">
+            Aguardando a conclusão do pré-atendimento pelo chat para gerar a confirmação automática.
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top: 16px;">
+        <button class="action-cta-btn" onclick="goToScreen('screen-op1-d')">
+          Acessar painel do decorador →
+        </button>
+      </div>
+    </section>
+
+    <!-- Passo 1D: Painel do decorador -->
+    <section id="screen-op1-d" class="screen">
+      <div class="step-nav">
+        <button class="btn-back" onclick="goToScreen('screen-op1-c')">← WhatsApp</button>
+        <div class="step-indicator">
+          <span class="step-dot completed">1</span>
+          <span class="step-dot completed">2</span>
+          <span class="step-dot completed">3</span>
+          <span class="step-dot active">4</span>
+        </div>
+      </div>
+
+      <div class="stage-box">
+        <strong>O que você está vendo:</strong> Lead qualificado com um clique para contato.
+      </div>
+
+      <div class="dashboard-panel">
+        <div class="lead-row">
+          <div>
+            <div style="font-size: 0.72rem; color: var(--text-soft); text-transform: uppercase;">Lead Recebido</div>
+            <div id="lead-name" style="font-size: 1.05rem; font-weight: 700; color: #FFF;">—</div>
+            <div id="lead-desc" style="font-size: 0.78rem; color: #E5C365;">Aguardando briefing no Passo 1</div>
+          </div>
+          <span id="lead-status" class="lead-status-pill" style="opacity: 0.6; background: rgba(255,255,255,0.08); color: var(--text-soft); border-color: rgba(255,255,255,0.15);">Aguardando dados</span>
+        </div>
+
+        <div id="lead-summary-text" style="font-size: 0.8rem; line-height: 1.45; color: var(--text-soft); margin-bottom: 16px;">
+          O lead aparecerá aqui qualificado e validado assim que o cliente responder ao pré-atendimento automatizado.
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 10px;">
+          <button class="action-cta-btn" onclick="simulateContactLead()">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72 12.84 12.84 0 0 0 .7 2.81 2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45 12.84 12.84 0 0 0 2.81.7A2 2 0 0 1 22 16.92z"/></svg>
+            Entrar em contato com o cliente
+          </button>
+          
+          <button class="btn-back" style="justify-content: center; padding: 10px;" onclick="goToScreen('screen-closing')">
+            Finalizar e ver resumo de soluções →
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================
+         OPORTUNIDADE 2: IMAGENS POR TOKENS (SALÃO DE FESTAS)
+         ======================================================== -->
+    <!-- Passo 2A: Chat curto da IA gerando -->
+    <section id="screen-op2-a" class="screen">
+      <div class="step-nav">
+        <button class="btn-back" onclick="goToScreen('screen-home')">← Início</button>
+        <div class="step-indicator">
+          <span class="step-dot active">1</span>
+          <span class="step-dot">2</span>
+          <span class="step-dot">3</span>
+          <span class="step-dot">4</span>
+        </div>
+      </div>
+
+      <div class="stage-box">
+        <strong>O que você está vendo:</strong> A IA entende o evento e gera a imagem da decoração.
+      </div>
+
+      <div class="chat-container" style="height: auto; min-height: 320px;">
+        <div class="chat-header">
+          <div class="chat-avatar">IA</div>
+          <div class="chat-header-text">
+            <h4>Motor de Renderização de Eventos</h4>
+            <p>● Síntese de Cenografia</p>
+          </div>
+        </div>
+        <div class="chat-messages" style="padding: 18px 14px;">
+          <div class="chat-bubble ai">
+            Recebi os parâmetros do evento: <strong>Casamento ao ar livre / salão integrado</strong>, 100 convidados, estilo romântico contemporâneo.
+          </div>
+          <div class="chat-bubble ai">
+            Cenografia mapeada: mesa principal com toalha linho bege, arco floral de gipsófila e rosas brancas, cadeiras Tiffany brancas, velas em copos cilíndricos e varal de luz quente.
+          </div>
+          <div class="chat-bubble ai" style="border-color: rgba(212, 175, 55, 0.4);">
+            ✨ <strong>Vou gerar a pré-visualização do salão decorado agora.</strong>
+          </div>
+        </div>
+        <div style="padding: 12px; background: #0E1A2C; text-align: center;">
+          <button class="action-cta-btn" onclick="goToScreen('screen-op2-b')">
+            Ver salão decorado (Antes & Depois) →
+          </button>
+        </div>
+      </div>
+    </section>
+
+    <!-- Passo 2B: Antes e Depois Interativo com Slider de Arraste -->
+    <section id="screen-op2-b" class="screen">
+      <div class="step-nav">
+        <button class="btn-back" onclick="goToScreen('screen-op2-a')">← Briefing</button>
+        <div class="step-indicator">
+          <span class="step-dot completed">1</span>
+          <span class="step-dot active">2</span>
+          <span class="step-dot">3</span>
+          <span class="step-dot">4</span>
+        </div>
+      </div>
+
+      <div class="stage-box">
+        <strong>O que você está vendo:</strong> Arraste a barra para comparar o salão cru e a transformação pronta.
+      </div>
+
+      <!-- Interactive Slider -->
+      <div class="slider-stage" id="sliderStage">
+        <div class="click-zoom-hint" onclick="openLightbox(true)" title="Ampliar imagem">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          Clique para ampliar
+        </div>
+
+        <span class="slider-tag tag-before">ANTES · Salão Vazio</span>
+        <span class="slider-tag tag-after">DEPOIS · IA Decorada</span>
+
+        <!-- BEFORE LAYER (Cru / Vazio) -->
+        <div class="slider-pane before-pane" id="paneBefore">
+          <div class="pane-svg-wrapper" id="svgBeforeContainer">
+            <!-- SVG Before: raw empty hall -->
+          </div>
+        </div>
+
+        <!-- AFTER LAYER (Decorado) -->
+        <div class="slider-pane after-pane" id="paneAfter">
+          <div class="pane-svg-wrapper" id="svgAfterContainer">
+            <!-- SVG After: decorated hall -->
+          </div>
+        </div>
+
+        <!-- Drag handle -->
+        <div class="slider-handle" id="sliderHandle">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="15 18 9 12 15 6"></polyline>
+          </svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="9 18 15 12 9 6"></polyline>
+          </svg>
+        </div>
+      </div>
+
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; font-size: 0.74rem; color: var(--text-soft);">
+        <span>← Arraste o divisor para os lados →</span>
+        <button style="background: none; border: none; color: #E5C365; cursor: pointer; text-decoration: underline;" onclick="openLightbox(true)">
+          Ver ampliado com marca d'água
+        </button>
+      </div>
+
+      <div style="margin-top: 14px;">
+        <button class="action-cta-btn" onclick="goToScreen('screen-op2-c')">
+          Avançar para sistema de tokens →
+        </button>
+      </div>
+    </section>
+
+    <!-- Passo 2C: Sistema de Tokens -->
+    <section id="screen-op2-c" class="screen">
+      <div class="step-nav">
+        <button class="btn-back" onclick="goToScreen('screen-op2-b')">← Slider</button>
+        <div class="step-indicator">
+          <span class="step-dot completed">1</span>
+          <span class="step-dot completed">2</span>
+          <span class="step-dot active">3</span>
+          <span class="step-dot">4</span>
+        </div>
+      </div>
+
+      <div class="stage-box">
+        <strong>O que você está vendo:</strong> Você controla o custo: cada imagem gasta tokens do seu saldo.
+      </div>
+
+      <!-- Mini Slider preview that reacts to variation -->
+      <div class="slider-stage" id="sliderStageMini" style="height: 250px;">
+        <span class="slider-tag tag-before" style="font-size:0.62rem;">ANTES</span>
+        <span class="slider-tag tag-after" id="currentStyleTag" style="font-size:0.62rem;">DEPOIS · Romântico</span>
+        <div class="slider-pane before-pane">
+          <div class="pane-svg-wrapper" id="svgBeforeMini"></div>
+        </div>
+        <div class="slider-pane after-pane" id="paneAfterMini">
+          <div class="pane-svg-wrapper" id="svgAfterMini"></div>
+        </div>
+        <div class="slider-handle" id="sliderHandleMini">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="15 18 9 12 15 6"></polyline></svg>
+        </div>
+      </div>
+
+      <!-- Token Control Bar -->
+      <div class="token-panel">
+        <div class="token-bar">
+          <div class="token-balance-box">
+            <div class="token-coin-icon">⬡</div>
+            <div class="token-count">
+              <span id="tokenVal">10</span>
+              <span>tokens disponíveis</span>
+            </div>
+          </div>
+          <button class="btn-recharge" onclick="openRechargeModal()">Recarregar tokens</button>
+        </div>
+
+        <div class="token-actions">
+          <button class="btn-generate" style="flex: 1;" onclick="generateVariation()">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2"><path d="M12 2v4m0 12v4M4.93 4.93l2.83 2.83m8.48 8.48l2.83 2.83M2 12h4m12 0h4M4.93 19.07l2.83-2.83m8.48-8.48l2.83-2.83"/></svg>
+            Gerar variação (-2 tokens)
+          </button>
+        </div>
+
+        <div id="tokenFeedback" class="token-feedback"></div>
+      </div>
+
+      <div style="margin-top: 14px;">
+        <button class="action-cta-btn" onclick="goToScreen('screen-op2-d')">
+          Ver visão final do decorador (sem marca) →
+        </button>
+      </div>
+    </section>
+
+    <!-- Passo 2D: Visão do Decorador (sem marca d'água) -->
+    <section id="screen-op2-d" class="screen">
+      <div class="step-nav">
+        <button class="btn-back" onclick="goToScreen('screen-op2-c')">← Tokens</button>
+        <div class="step-indicator">
+          <span class="step-dot completed">1</span>
+          <span class="step-dot completed">2</span>
+          <span class="step-dot completed">3</span>
+          <span class="step-dot active">4</span>
+        </div>
+      </div>
+
+      <div class="stage-box">
+        <strong>O que você está vendo:</strong> Imagem final sem marca d'água, pronta para enviar ao cliente.
+      </div>
+
+      <div style="background: #112138; border: 1px solid rgba(212, 175, 55, 0.4); border-radius: 12px; overflow: hidden; box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);">
+        <div style="height: 280px; width: 100%; position: relative;" id="cleanRenderContainer">
+          <!-- Clean render inserted via JS -->
+        </div>
+        <div style="padding: 16px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <div style="font-weight: 600; font-size: 0.95rem; color: #FFF;">Proposta Aprovada · Decoração Floral Ouro</div>
+            <span style="font-size: 0.7rem; color: #44DE80; background: rgba(68, 222, 128, 0.12); padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(68, 222, 128, 0.3);">Alta Definição</span>
+          </div>
+          <p style="font-size: 0.8rem; color: var(--text-soft); line-height: 1.4; margin-bottom: 14px;">
+            Arquivo final gerado sem marcas, com a composição cenográfica completa para apresentação formal em propostas comerciais ou envio direto pelo WhatsApp.
+          </p>
+
+          <div style="display: flex; gap: 8px;">
+            <button class="btn-back" style="flex: 1; justify-content: center;" onclick="openLightbox(false)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+              Ver em tela cheia
+            </button>
+            <button class="action-cta-btn" style="flex: 1;" onclick="goToScreen('screen-closing')">
+              Concluir demonstração →
+            </button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ========================================================
+         FECHAMENTO
+         ======================================================== -->
+    <section id="screen-closing" class="screen">
+      <div class="step-nav" style="justify-content: flex-start;">
+        <button class="btn-back" onclick="goToScreen('screen-home')">← Voltar ao Início</button>
+      </div>
+
+      <h2 class="hero-lead" style="margin-bottom: 18px;">Potencialize seu ateliê de eventos.</h2>
+
+      <div class="final-grid">
+        <div class="final-card">
+          <div>
+            <h3>Op. 1 · Pré-atendimento do evento</h3>
+            <p>Ideal para organizar e qualificar o primeiro contato do evento.</p>
+          </div>
+          <button class="btn-back" style="width: 100%; justify-content: center;" onclick="startOp1()">
+            Rever pré-atendimento
+          </button>
+        </div>
+
+        <div class="final-card">
+          <div>
+            <h3>Op. 2 · IA com imagens por tokens</h3>
+            <p>Ideal para vender a decoração antes de montar.</p>
+          </div>
+          <button class="btn-back" style="width: 100%; justify-content: center;" onclick="startOp2()">
+            Rever imagens por tokens
+          </button>
+        </div>
+      </div>
+
+      <div style="margin-top: 10px; text-align: center;">
+        <a href="https://wa.me/5512981078559?text=Acessei%20o%20prot%C3%B3tipo%20de%20decora%C3%A7%C3%A3o%20e%20gostaria%20de%20algumas%20informa%C3%A7%C3%B5es" 
+           target="_blank" 
+           rel="noopener" 
+           class="action-cta-btn"
+           style="font-size: 0.95rem; padding: 16px 20px;">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12.04 2C6.58 2 2.13 6.45 2.13 11.91C2.13 13.66 2.59 15.36 3.45 16.86L2.05 22L7.3 20.62C8.75 21.41 10.38 21.83 12.04 21.83C17.5 21.83 21.95 17.38 21.95 11.92C21.95 9.27 20.92 6.78 19.05 4.91C17.18 3.04 14.69 2 12.04 2M12.05 3.67C14.25 3.67 16.31 4.53 17.87 6.09C19.42 7.65 20.28 9.72 20.28 11.92C20.28 16.46 16.58 20.16 12.04 20.16C10.66 20.16 9.3 19.8 8.1 19.09L7.81 18.92L4.7 19.74L5.53 16.71L5.34 16.41C4.55 15.15 4.14 13.55 4.14 11.91C4.14 7.37 7.84 3.67 12.05 3.67M9.54 7.38C9.37 7.38 9.1 7.45 8.87 7.7C8.63 7.95 7.97 8.57 7.97 9.84C7.97 11.11 8.9 12.33 9.02 12.5C9.15 12.67 10.82 15.25 13.4 16.36C15.54 17.29 15.98 17.1 16.45 17.06C16.92 17.02 17.97 16.44 18.19 15.82C18.41 15.2 18.41 14.67 18.34 14.56C18.28 14.44 18.11 14.38 17.85 14.25C17.6 14.12 16.37 13.51 16.14 13.43C15.91 13.34 15.75 13.3 15.58 13.55C15.42 13.8 14.94 14.38 14.8 14.55C14.65 14.71 14.51 14.73 14.26 14.61C14 14.48 12.92 14.13 11.64 12.99C10.64 12.1 9.96 11 9.84 10.79C9.71 10.58 9.83 10.47 9.95 10.35C10.07 10.23 10.21 10.05 10.35 9.89C10.49 9.72 10.53 9.6 10.63 9.41C10.72 9.22 10.68 9.05 10.61 8.93C10.55 8.8 10.08 7.64 9.88 7.17C9.69 6.71 9.5 6.78 9.35 6.77C9.21 6.77 9.04 6.77 9.54 7.38Z"/>
+          </svg>
+          Agendar conversa com a Prumo Estratégico
+        </a>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer-note">
+      PRUMO ESTRATÉGICO © 2025 · Tecnologia e inteligência para decoradores de eventos
+    </footer>
+  </div>
+
+  <!-- Lightbox Modal (Com ou sem marca d'água) -->
+  <div id="lightboxModal" class="lightbox-modal" onclick="closeLightboxOnBackdrop(event)">
+    <div class="lightbox-content">
+      <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+      <div class="lightbox-view" id="lightboxViewContainer">
+        <!-- SVG will be placed here -->
+        <div id="lightboxWatermark" class="lightbox-watermark">PRUMO ESTRATÉGICO</div>
+      </div>
+      <div style="padding: 12px 16px; background: #0E1A2C; display: flex; justify-content: space-between; align-items: center;">
+        <span id="lightboxCaption" style="font-size: 0.8rem; color: #E5C365; font-weight: 600;">Pré-visualização do Salão</span>
+        <button class="btn-back" style="padding: 4px 10px;" onclick="closeLightbox()">Fechar</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Recharge tokens modal -->
+  <div id="rechargeModal" class="recharge-modal" onclick="closeRechargeOnBackdrop(event)">
+    <div class="recharge-box">
+      <div style="font-size: 1.8rem; margin-bottom: 8px;">⬡</div>
+      <h3 style="font-family: var(--font-serif); font-size: 1.3rem; color: #FFF; margin-bottom: 8px;">Recarga de Tokens</h3>
+      <p style="font-size: 0.85rem; color: #E5C365; margin-bottom: 18px;">
+        A recarga é feita com a Prumo Estratégico.
+      </p>
+      <button class="action-cta-btn" onclick="closeRechargeModal()">
+        Entendido
+      </button>
+    </div>
+  </div>
+
+  <!-- ========================================================
+       SCRIPT LOGIC & INTERACTION
+       ======================================================== -->
+  <script>
+    /* ----------------------------------------------------
+       ISENÇÃO TOTAL DE PERSISTÊNCIA (SESSION-ONLY RESETS)
+       ---------------------------------------------------- */
+    try {
+      localStorage.clear();
+      sessionStorage.clear();
+    } catch (_) {}
+
+    /* ----------------------------------------------------
+       STATE & BRIEFING QUESTIONS DATA
+       ---------------------------------------------------- */
+    let currentTokens = 10;
+    let currentVariationIndex = 0;
+
+    const briefingQuestions = [
+      {
+        id: 'tipo',
+        q: "Olá! Seja muito bem-vindo ao ateliê. Para começarmos seu projeto, qual tipo de evento vamos celebrar?",
+        replies: ["Casamento", "Festa de Aniversário", "Debutante (15 Anos)", "Igreja e Batizado", "Corporativo"]
+      },
+      {
+        id: 'data',
+        q: "Maravilhoso! E para quando está prevista a data do evento?",
+        replies: ["Novembro / 2025", "Dezembro / 2025", "Primeiro Semestre 2026", "Ainda definindo data"]
+      },
+      {
+        id: 'local',
+        q: "Onde será realizado o evento?",
+        replies: ["Salão de festas fechado", "Chácara / Ao ar livre", "Igreja / Templo", "Espaço corporativo"]
+      },
+      {
+        id: 'convidados',
+        q: "Quantos convidados você planeja receber?",
+        replies: ["Até 50 pessoas", "50 a 100 pessoas", "100 a 200 pessoas", "Mais de 200 convidados"]
+      },
+      {
+        id: 'estilo',
+        q: "Qual estilo de decoração mais toca o seu coração?",
+        replies: ["Romântico & Floral", "Clássico Sofisticado", "Rústico Chique", "Botânico & Verde", "Místico com Velas"]
+      },
+      {
+        id: 'cores',
+        q: "Qual é a sua paleta de cores preferida?",
+        replies: ["Branco, champagne e ouro", "Tons pastéis e rosé", "Verde botânico e amadeirado", "Marsala e vinho"]
+      },
+      {
+        id: 'ref',
+        q: "Alguma referência afetiva especial? (Uma flor que lembra a família, um detalhe inegociável, uma lembrança)",
+        replies: ["Gipsófilas e muitas velas", "Lustres clássicos iluminados", "Arco de flores orgânico", "Painel verde com fotos"]
+      },
+      {
+        id: 'investimento',
+        q: "Por fim, qual é a faixa de investimento prevista para a cenografia?",
+        replies: ["R$ 10.000 a R$ 18.000", "R$ 18.000 a R$ 30.000", "Acima de R$ 30.000", "Quero proposta sob medida"]
+      }
+    ];
+
+    let currentQIndex = 0;
+    let dossierData = {};
+
+    /* ----------------------------------------------------
+       SCENE SVGS: BEFORE & AFTER VARIATIONS (Party Hall)
+       ---------------------------------------------------- */
+    // SVG BEFORE: Empty, raw party hall (concrete floor, bare light, wires, plain walls)
+    const svgBeforeRaw = `
+      <svg viewBox="0 0 800 480" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="wallGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#22334A"/>
+            <stop offset="100%" stop-color="#142133"/>
+          </linearGradient>
+          <linearGradient id="floorGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#182333"/>
+            <stop offset="100%" stop-color="#0E1624"/>
+          </linearGradient>
+          <linearGradient id="coldLight" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="rgba(190, 220, 255, 0.25)"/>
+            <stop offset="100%" stop-color="rgba(190, 220, 255, 0)"/>
+          </linearGradient>
+        </defs>
+        <!-- Background walls -->
+        <rect width="800" height="480" fill="#0D1726"/>
+        <polygon points="0,0 800,0 720,290 80,290" fill="url(#wallGrad)"/>
+        <!-- Side walls -->
+        <polygon points="0,0 80,290 0,480" fill="#18283E"/>
+        <polygon points="800,0 720,290 800,480" fill="#152438"/>
+        <!-- Raw concrete floor -->
+        <polygon points="80,290 720,290 800,480 0,480" fill="url(#floorGrad)"/>
+        <!-- Floor concrete joints / grid -->
+        <line x1="80" y1="290" x2="0" y2="480" stroke="rgba(255,255,255,0.04)" stroke-width="2"/>
+        <line x1="720" y1="290" x2="800" y2="480" stroke="rgba(255,255,255,0.04)" stroke-width="2"/>
+        <line x1="240" y1="290" x2="200" y2="480" stroke="rgba(255,255,255,0.03)" stroke-width="1.5"/>
+        <line x1="400" y1="290" x2="400" y2="480" stroke="rgba(255,255,255,0.03)" stroke-width="1.5"/>
+        <line x1="560" y1="290" x2="600" y2="480" stroke="rgba(255,255,255,0.03)" stroke-width="1.5"/>
+        <line x1="50" y1="360" x2="750" y2="360" stroke="rgba(255,255,255,0.03)" stroke-width="1.5"/>
+        <line x1="20" y1="420" x2="780" y2="420" stroke="rgba(255,255,255,0.03)" stroke-width="1.5"/>
+        <!-- Exposed ceiling wires & hanging conduit -->
+        <path d="M120,40 Q250,90 400,60 T700,50" fill="none" stroke="#0B121E" stroke-width="3"/>
+        <path d="M200,50 Q300,105 450,75 T650,65" fill="none" stroke="#080E18" stroke-width="2"/>
+        <!-- Bare fluorescent tube emitting cold light -->
+        <rect x="340" y="55" width="120" height="6" rx="2" fill="#DDE8F8" opacity="0.9"/>
+        <polygon points="320,61 480,61 540,240 260,240" fill="url(#coldLight)"/>
+        <!-- Empty industrial window in back -->
+        <rect x="280" y="110" width="240" height="130" fill="#121D2C" stroke="#1F2F44" stroke-width="3"/>
+        <line x1="400" y1="110" x2="400" y2="240" stroke="#1F2F44" stroke-width="2"/>
+        <line x1="280" y1="175" x2="520" y2="175" stroke="#1F2F44" stroke-width="2"/>
+        <!-- Solitary folded bare metal chair in corner -->
+        <g transform="translate(180, 270) scale(0.75)" opacity="0.65">
+          <line x1="20" y1="80" x2="40" y2="20" stroke="#6C7A8E" stroke-width="4"/>
+          <line x1="60" y1="80" x2="40" y2="20" stroke="#546376" stroke-width="4"/>
+          <rect x="25" y="45" width="30" height="5" fill="#4B5869"/>
+          <line x1="30" y1="10" x2="50" y2="10" stroke="#6C7A8E" stroke-width="3"/>
+        </g>
+        <!-- Power socket and dangling cable on wall -->
+        <rect x="630" y="240" width="12" height="18" fill="#1D2A3B" stroke="#2B3C52"/>
+        <path d="M636,258 Q640,290 625,310" fill="none" stroke="#111B29" stroke-width="2"/>
+      </svg>
+    `;
+
+    // AFTER VARIATION 1: Romantic Floral & Gypsophila Arch
+    const svgAfterRomantic = `
+      <svg viewBox="0 0 800 480" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="warmWall" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#1B192A"/>
+            <stop offset="100%" stop-color="#282035"/>
+          </linearGradient>
+          <linearGradient id="warmFloor" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#241B26"/>
+            <stop offset="100%" stop-color="#140F18"/>
+          </linearGradient>
+          <linearGradient id="goldSheen" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="#C5A049"/>
+            <stop offset="50%" stop-color="#FBE6A2"/>
+            <stop offset="100%" stop-color="#AA8220"/>
+          </linearGradient>
+          <radialGradient id="fairyGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#FFEBB0" stop-opacity="0.9"/>
+            <stop offset="50%" stop-color="#E2B852" stop-opacity="0.3"/>
+            <stop offset="100%" stop-color="#D4AF37" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <!-- Warm ambient room -->
+        <rect width="800" height="480" fill="#120F1A"/>
+        <polygon points="0,0 800,0 720,290 80,290" fill="url(#warmWall)"/>
+        <polygon points="80,290 720,290 800,480 0,480" fill="url(#warmFloor)"/>
+        
+        <!-- Hanging string fairy lights across ceiling -->
+        <path d="M40,50 Q220,110 400,70 T760,60" fill="none" stroke="#AA8220" stroke-width="1.2" opacity="0.7"/>
+        <path d="M60,90 Q260,140 450,95 T740,105" fill="none" stroke="#AA8220" stroke-width="1" opacity="0.6"/>
+        <!-- Fairy light bulbs -->
+        <circle cx="120" cy="74" r="5" fill="#FFF2BD"/><circle cx="120" cy="74" r="14" fill="url(#fairyGlow)"/>
+        <circle cx="210" cy="98" r="5" fill="#FFF2BD"/><circle cx="210" cy="98" r="14" fill="url(#fairyGlow)"/>
+        <circle cx="310" cy="95" r="5" fill="#FFF2BD"/><circle cx="310" cy="95" r="14" fill="url(#fairyGlow)"/>
+        <circle cx="410" cy="70" r="5" fill="#FFF2BD"/><circle cx="410" cy="70" r="14" fill="url(#fairyGlow)"/>
+        <circle cx="510" cy="80" r="5" fill="#FFF2BD"/><circle cx="510" cy="80" r="14" fill="url(#fairyGlow)"/>
+        <circle cx="620" cy="72" r="5" fill="#FFF2BD"/><circle cx="620" cy="72" r="14" fill="url(#fairyGlow)"/>
+        <circle cx="710" cy="64" r="5" fill="#FFF2BD"/><circle cx="710" cy="64" r="14" fill="url(#fairyGlow)"/>
+
+        <!-- Draped sheer voil curtains in back -->
+        <path d="M260,70 C280,180 250,230 250,290 L330,290 C340,230 310,180 320,70 Z" fill="rgba(255, 245, 235, 0.18)"/>
+        <path d="M480,70 C470,180 500,230 490,290 L570,290 C560,230 540,180 540,70 Z" fill="rgba(255, 245, 235, 0.18)"/>
+
+        <!-- Grand Floral Arch (Gypsophila + Cream Roses) -->
+        <path d="M290,290 C290,130 510,130 510,290" fill="none" stroke="#D8C8B0" stroke-width="26" stroke-linecap="round" opacity="0.95"/>
+        <path d="M285,290 C285,125 515,125 515,290" fill="none" stroke="#FFFFFF" stroke-width="18" stroke-linecap="round" stroke-dasharray="4 6" opacity="0.9"/>
+        <!-- Golden accents on arch -->
+        <circle cx="330" cy="180" r="7" fill="url(#goldSheen)"/>
+        <circle cx="470" cy="180" r="7" fill="url(#goldSheen)"/>
+        <circle cx="400" cy="140" r="9" fill="url(#goldSheen)"/>
+        <circle cx="360" cy="155" r="6" fill="#FFF0D4"/>
+        <circle cx="440" cy="155" r="6" fill="#FFF0D4"/>
+
+        <!-- Main Banquet / Family Table (Linen Beige cloth draped) -->
+        <!-- Table drop cloth -->
+        <polygon points="260,320 540,320 570,440 230,440" fill="#E6DAC8"/>
+        <!-- Table top -->
+        <polygon points="280,295 520,295 540,320 260,320" fill="#F4EFE6"/>
+        <line x1="260" y1="320" x2="540" y2="320" stroke="#D3C1A5" stroke-width="2"/>
+        <!-- Folds on table cloth -->
+        <path d="M290,320 L280,440" stroke="#C9B89E" stroke-width="1.8"/>
+        <path d="M360,320 L350,440" stroke="#C9B89E" stroke-width="1.8"/>
+        <path d="M440,320 L450,440" stroke="#C9B89E" stroke-width="1.8"/>
+        <path d="M510,320 L520,440" stroke="#C9B89E" stroke-width="1.8"/>
+
+        <!-- Elegant Tiffany Chairs on sides -->
+        <g transform="translate(180, 280)">
+          <!-- Left Chair -->
+          <line x1="30" y1="90" x2="30" y2="30" stroke="#F6F3ED" stroke-width="3"/>
+          <line x1="50" y1="90" x2="50" y2="30" stroke="#E3DDD1" stroke-width="3"/>
+          <rect x="25" y="45" width="30" height="6" fill="#FFF" rx="2"/>
+          <line x1="28" y1="10" x2="28" y2="45" stroke="#F6F3ED" stroke-width="2"/>
+          <line x1="52" y1="10" x2="52" y2="45" stroke="#F6F3ED" stroke-width="2"/>
+          <line x1="28" y1="18" x2="52" y2="18" stroke="#F6F3ED" stroke-width="2"/>
+          <line x1="28" y1="28" x2="52" y2="28" stroke="#F6F3ED" stroke-width="2"/>
+        </g>
+        <g transform="translate(560, 280)">
+          <!-- Right Chair -->
+          <line x1="30" y1="90" x2="30" y2="30" stroke="#F6F3ED" stroke-width="3"/>
+          <line x1="50" y1="90" x2="50" y2="30" stroke="#E3DDD1" stroke-width="3"/>
+          <rect x="25" y="45" width="30" height="6" fill="#FFF" rx="2"/>
+          <line x1="28" y1="10" x2="28" y2="45" stroke="#F6F3ED" stroke-width="2"/>
+          <line x1="52" y1="10" x2="52" y2="45" stroke="#F6F3ED" stroke-width="2"/>
+          <line x1="28" y1="18" x2="52" y2="18" stroke="#F6F3ED" stroke-width="2"/>
+          <line x1="28" y1="28" x2="52" y2="28" stroke="#F6F3ED" stroke-width="2"/>
+        </g>
+
+        <!-- Centerpiece on Table: Lush runner + Glass Cylinder Candles -->
+        <!-- Floral runner -->
+        <ellipse cx="400" cy="305" rx="110" ry="12" fill="#E8DDD0"/>
+        <ellipse cx="400" cy="304" rx="100" ry="9" fill="#FFF" opacity="0.8"/>
+        <!-- Golden candelabra / tall glass cylinders -->
+        <rect x="330" y="270" width="8" height="30" fill="rgba(255,255,255,0.4)" stroke="rgba(255,255,255,0.7)"/>
+        <circle cx="334" cy="272" r="3.5" fill="#FFE28A"/><circle cx="334" cy="272" r="10" fill="url(#fairyGlow)"/>
+
+        <rect x="400" y="260" width="10" height="40" fill="rgba(255,255,255,0.4)" stroke="rgba(255,255,255,0.7)"/>
+        <circle cx="405" cy="262" r="4" fill="#FFE28A"/><circle cx="405" cy="262" r="14" fill="url(#fairyGlow)"/>
+
+        <rect x="470" y="270" width="8" height="30" fill="rgba(255,255,255,0.4)" stroke="rgba(255,255,255,0.7)"/>
+        <circle cx="474" cy="272" r="3.5" fill="#FFE28A"/><circle cx="474" cy="272" r="10" fill="url(#fairyGlow)"/>
+
+        <!-- Warm floor reflections -->
+        <ellipse cx="400" cy="450" rx="180" ry="16" fill="rgba(212, 175, 55, 0.15)"/>
+      </svg>
+    `;
+
+    // AFTER VARIATION 2: Botanical & Green Foliage Backdrop
+    const svgAfterBotanical = `
+      <svg viewBox="0 0 800 480" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="botanicalGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#10251C"/>
+            <stop offset="100%" stop-color="#1B3A2C"/>
+          </linearGradient>
+          <radialGradient id="greenGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#FFEAA7" stop-opacity="0.8"/>
+            <stop offset="100%" stop-color="#2ECC71" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <!-- Ambient -->
+        <rect width="800" height="480" fill="#0C1913"/>
+        <polygon points="0,0 800,0 720,290 80,290" fill="url(#botanicalGrad)"/>
+        <polygon points="80,290 720,290 800,480 0,480" fill="#141E19"/>
+
+        <!-- Large Green Living Wall Backdrop in center -->
+        <rect x="240" y="80" width="320" height="210" rx="6" fill="#1C4030" stroke="#D4AF37" stroke-width="2"/>
+        <!-- Texture foliage on green wall -->
+        <g fill="#2A5C46" opacity="0.75">
+          <circle cx="280" cy="120" r="24"/><circle cx="340" cy="110" r="28"/><circle cx="400" cy="125" r="26"/>
+          <circle cx="460" cy="115" r="25"/><circle cx="510" cy="130" r="22"/><circle cx="300" cy="170" r="30"/>
+          <circle cx="370" cy="180" r="34"/><circle cx="440" cy="170" r="32"/><circle cx="500" cy="185" r="26"/>
+          <circle cx="330" cy="230" r="28"/><circle cx="410" cy="240" r="32"/><circle cx="480" cy="230" r="26"/>
+        </g>
+        <!-- Neon / Gold monogram ring in front of green wall -->
+        <circle cx="400" cy="160" r="44" stroke="#F5DF88" stroke-width="4" fill="none"/>
+        <text x="400" y="168" fill="#FFF" font-family="'Cormorant Garamond', serif" font-size="28" text-anchor="middle" font-weight="700">C &amp; G</text>
+
+        <!-- Hanging eucalyptus / greenery runners from ceiling -->
+        <path d="M50,40 Q250,90 400,60 T750,50" fill="none" stroke="#3D7458" stroke-width="8" stroke-dasharray="14 8"/>
+        <!-- Pendant Edison light bulbs hanging down -->
+        <line x1="300" y1="60" x2="300" y2="120" stroke="#AA8220" stroke-width="1.5"/>
+        <circle cx="300" cy="124" r="5" fill="#FFEAA7"/><circle cx="300" cy="124" r="16" fill="url(#greenGlow)"/>
+
+        <line x1="500" y1="60" x2="500" y2="120" stroke="#AA8220" stroke-width="1.5"/>
+        <circle cx="500" cy="124" r="5" fill="#FFEAA7"/><circle cx="500" cy="124" r="16" fill="url(#greenGlow)"/>
+
+        <!-- Rustic Wood Banquet Table -->
+        <polygon points="260,320 540,320 570,440 230,440" fill="#4A3423"/>
+        <polygon points="280,295 520,295 540,320 260,320" fill="#664730"/>
+        <!-- Table runner in dark green velvet with candles -->
+        <polygon points="340,295 460,295 470,440 330,440" fill="#1C382A"/>
+        <!-- Amber bottle vases with white wildflowers -->
+        <rect x="360" y="275" width="10" height="20" fill="#B36B2B" rx="2"/>
+        <circle cx="365" cy="265" r="4" fill="#FFF"/>
+        <rect x="430" y="275" width="10" height="20" fill="#B36B2B" rx="2"/>
+        <circle cx="435" cy="265" r="4" fill="#FFF"/>
+      </svg>
+    `;
+
+    // AFTER VARIATION 3: Classic with Crystal & Gold Chandeliers
+    const svgAfterClassic = `
+      <svg viewBox="0 0 800 480" width="100%" height="100%" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="classicWall" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#1F2338"/>
+            <stop offset="100%" stop-color="#161928"/>
+          </linearGradient>
+          <radialGradient id="chandelierGlow" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#FFF2BD" stop-opacity="1"/>
+            <stop offset="40%" stop-color="#E5C365" stop-opacity="0.4"/>
+            <stop offset="100%" stop-color="#D4AF37" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <!-- Room Base -->
+        <rect width="800" height="480" fill="#0F121F"/>
+        <polygon points="0,0 800,0 720,290 80,290" fill="url(#classicWall)"/>
+        <!-- Glossy reflective parquet floor -->
+        <polygon points="80,290 720,290 800,480 0,480" fill="#201815"/>
+        <polygon points="120,290 680,290 740,480 60,480" fill="rgba(212, 175, 55, 0.08)"/>
+
+        <!-- Classic wall molding boiserie in gold lines -->
+        <rect x="120" y="70" width="90" height="180" fill="none" stroke="#C5A049" stroke-width="1.8" opacity="0.6"/>
+        <rect x="130" y="80" width="70" height="160" fill="none" stroke="#C5A049" stroke-width="0.8" opacity="0.4"/>
+        
+        <rect x="590" y="70" width="90" height="180" fill="none" stroke="#C5A049" stroke-width="1.8" opacity="0.6"/>
+        <rect x="600" y="80" width="70" height="160" fill="none" stroke="#C5A049" stroke-width="0.8" opacity="0.4"/>
+
+        <!-- Grand Central Crystal & Gold Chandelier -->
+        <line x1="400" y1="0" x2="400" y2="60" stroke="#D4AF37" stroke-width="3"/>
+        <path d="M340,80 Q400,120 460,80" fill="none" stroke="#D4AF37" stroke-width="4"/>
+        <path d="M310,105 Q400,165 490,105" fill="none" stroke="#D4AF37" stroke-width="3"/>
+        <!-- Chandelier arms & candles -->
+        <circle cx="340" cy="75" r="4" fill="#FFEAA7"/><circle cx="340" cy="75" r="14" fill="url(#chandelierGlow)"/>
+        <circle cx="370" cy="85" r="4" fill="#FFEAA7"/><circle cx="370" cy="85" r="14" fill="url(#chandelierGlow)"/>
+        <circle cx="400" cy="90" r="5" fill="#FFEAA7"/><circle cx="400" cy="90" r="20" fill="url(#chandelierGlow)"/>
+        <circle cx="430" cy="85" r="4" fill="#FFEAA7"/><circle cx="430" cy="85" r="14" fill="url(#chandelierGlow)"/>
+        <circle cx="460" cy="75" r="4" fill="#FFEAA7"/><circle cx="460" cy="75" r="14" fill="url(#chandelierGlow)"/>
+        <!-- Crystal drops -->
+        <line x1="340" y1="80" x2="340" y2="110" stroke="#FFF" stroke-width="1" stroke-dasharray="2 3"/>
+        <line x1="400" y1="95" x2="400" y2="135" stroke="#FFF" stroke-width="1.2" stroke-dasharray="2 3"/>
+        <line x1="460" y1="80" x2="460" y2="110" stroke="#FFF" stroke-width="1" stroke-dasharray="2 3"/>
+
+        <!-- Mirrored Dining Table with High Gold Vases -->
+        <polygon points="260,320 540,320 570,440 230,440" fill="#ECE8E1"/>
+        <polygon points="280,295 520,295 540,320 260,320" fill="#FFFFFF"/>
+        <!-- Mirror shine stripe -->
+        <polygon points="360,295 440,295 420,320 340,320" fill="rgba(212, 175, 55, 0.3)"/>
+
+        <!-- Tall Golden Trumpet Vases with White Hydrangeas & Orchids -->
+        <polygon points="328,240 332,240 331,295 329,295" fill="#D4AF37"/>
+        <circle cx="330" cy="235" r="14" fill="#FBF8F2"/>
+        
+        <polygon points="468,240 472,240 471,295 469,295" fill="#D4AF37"/>
+        <circle cx="470" cy="235" r="14" fill="#FBF8F2"/>
+
+        <!-- Low silver bowl with floating candles in center -->
+        <ellipse cx="400" cy="305" rx="30" ry="7" fill="#D2D6DC"/>
+        <circle cx="392" cy="302" r="3" fill="#FFE28A"/>
+        <circle cx="408" cy="302" r="3" fill="#FFE28A"/>
+      </svg>
+    `;
+
+    const afterVariations = [
+      { name: "Romântico & Floral", svg: svgAfterRomantic, desc: "Arco de gipsófila, velas cilíndricas e luz quente" },
+      { name: "Botânico & Verde", svg: svgAfterBotanical, desc: "Painel verde vivo com monograma dourado e lâmpadas Edison" },
+      { name: "Clássico Sofisticado", svg: svgAfterClassic, desc: "Lustres de cristal dourados, boiseries e vasos altos" }
+    ];
+
+    /* ----------------------------------------------------
+       INITIALIZATION & TOTAL RESET
+       ---------------------------------------------------- */
+    document.addEventListener("DOMContentLoaded", () => {
+      resetPrototypeState();
+      setupSlider("sliderStage", "paneAfter", "sliderHandle");
+      setupSlider("sliderStageMini", "paneAfterMini", "sliderHandleMini");
+    });
+
+    function resetPrototypeState() {
+      try {
+        localStorage.clear();
+        sessionStorage.clear();
+      } catch (_) {}
+
+      // Reset Tokens
+      currentTokens = 10;
+      const tokenEl = document.getElementById("tokenVal");
+      if (tokenEl) tokenEl.innerText = "10";
+      const fb = document.getElementById("tokenFeedback");
+      if (fb) {
+        fb.style.display = "none";
+        fb.innerText = "";
+      }
+
+      // Reset Variations & Scenes
+      currentVariationIndex = 0;
+      loadSvgScenes();
+
+      // Reset Sliders position
+      resetSlidersPosition();
+
+      // Reset Chat Op 1
+      currentQIndex = 0;
+      dossierData = {};
+      const chatStream = document.getElementById("chat-stream");
+      if (chatStream) chatStream.innerHTML = "";
+      const repliesBar = document.getElementById("chat-replies");
+      if (repliesBar) repliesBar.innerHTML = "";
+      const chatInput = document.getElementById("chat-text-input");
+      if (chatInput) chatInput.value = "";
+
+      // Reset Dossier
+      resetDossierView();
+
+      // Reset WhatsApp mock
+      resetWhatsAppMock();
+
+      // Reset Decorator Dashboard
+      resetDecoratorPanel();
+
+      // Garantir tela inicial
+      goToScreen("screen-home");
+    }
+
+    function loadSvgScenes() {
+      const beforeC = document.getElementById("svgBeforeContainer");
+      if (beforeC) beforeC.innerHTML = svgBeforeRaw;
+
+      const afterC = document.getElementById("svgAfterContainer");
+      if (afterC) afterC.innerHTML = afterVariations[0].svg;
+
+      const beforeMini = document.getElementById("svgBeforeMini");
+      if (beforeMini) beforeMini.innerHTML = svgBeforeRaw;
+
+      const afterMini = document.getElementById("svgAfterMini");
+      if (afterMini) afterMini.innerHTML = afterVariations[0].svg;
+
+      const cleanC = document.getElementById("cleanRenderContainer");
+      if (cleanC) cleanC.innerHTML = afterVariations[0].svg;
+
+      const styleTag = document.getElementById("currentStyleTag");
+      if (styleTag) styleTag.innerText = `DEPOIS · ${afterVariations[0].name}`;
+    }
+
+    function resetSlidersPosition() {
+      const afterPane = document.getElementById("paneAfter");
+      const handle = document.getElementById("sliderHandle");
+      if (afterPane) afterPane.style.width = "50%";
+      if (handle) handle.style.left = "50%";
+
+      const afterPaneMini = document.getElementById("paneAfterMini");
+      const handleMini = document.getElementById("sliderHandleMini");
+      if (afterPaneMini) afterPaneMini.style.width = "50%";
+      if (handleMini) handleMini.style.left = "50%";
+    }
+
+    function resetDossierView() {
+      const proto = document.getElementById("dossier-protocol");
+      if (proto) proto.innerText = "Dossiê Estruturado · Sem protocolo";
+
+      const badge = document.getElementById("dossier-badge");
+      if (badge) {
+        badge.style.background = "rgba(255, 255, 255, 0.08)";
+        badge.style.borderColor = "rgba(255, 255, 255, 0.15)";
+        badge.style.color = "var(--text-soft)";
+        badge.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg> Aguardando pré-atendimento`;
+      }
+
+      const fields = [
+        "dossier-tipo", "dossier-data", "dossier-local", "dossier-convidados",
+        "dossier-estilo", "dossier-cores", "dossier-ref", "dossier-inv"
+      ];
+      fields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.innerText = "—";
+      });
+    }
+
+    function resetWhatsAppMock() {
+      const waArea = document.getElementById("wa-chat-area");
+      if (waArea) {
+        waArea.innerHTML = `
+          <div class="wa-empty-msg" style="text-align: center; color: #8696A0; font-size: 0.78rem; margin: auto; padding: 24px 16px;">
+            Aguardando a conclusão do pré-atendimento pelo chat para gerar a confirmação automática.
+          </div>
+        `;
+      }
+    }
+
+    function resetDecoratorPanel() {
+      const name = document.getElementById("lead-name");
+      if (name) name.innerText = "—";
+
+      const desc = document.getElementById("lead-desc");
+      if (desc) desc.innerText = "Aguardando briefing no Passo 1";
+
+      const status = document.getElementById("lead-status");
+      if (status) {
+        status.innerText = "Aguardando dados";
+        status.style.opacity = "0.6";
+        status.style.background = "rgba(255, 255, 255, 0.08)";
+        status.style.color = "var(--text-soft)";
+        status.style.borderColor = "rgba(255, 255, 255, 0.15)";
+      }
+
+      const sum = document.getElementById("lead-summary-text");
+      if (sum) {
+        sum.innerText = "O lead aparecerá aqui qualificado e validado assim que o cliente responder ao pré-atendimento automatizado.";
+      }
+    }
+
+    /* ----------------------------------------------------
+       NAVIGATION
+       ---------------------------------------------------- */
+    function goToScreen(screenId) {
+      document.querySelectorAll(".screen").forEach(el => el.classList.remove("active"));
+      const target = document.getElementById(screenId);
+      if (target) {
+        target.classList.add("active");
+        window.scrollTo({ top: 0, behavior: "smooth" });
+      }
+    }
+
+    function startOp1() {
+      // Reinicia o fluxo do chat da Oportunidade 1 sem respostas anteriores
+      currentQIndex = 0;
+      dossierData = {};
+      const chatStream = document.getElementById("chat-stream");
+      if (chatStream) chatStream.innerHTML = "";
+      resetDossierView();
+      resetWhatsAppMock();
+      resetDecoratorPanel();
+
+      goToScreen("screen-op1-a");
+      renderChatQuestion();
+    }
+
+    function startOp2() {
+      goToScreen("screen-op2-a");
+    }
+
+    /* ----------------------------------------------------
+       OPORTUNIDADE 1: CHAT LOGIC
+       ---------------------------------------------------- */
+    function renderChatQuestion() {
+      const chatStream = document.getElementById("chat-stream");
+      const repliesBar = document.getElementById("chat-replies");
+
+      if (currentQIndex === 0) {
+        chatStream.innerHTML = '';
+      }
+
+      if (currentQIndex < briefingQuestions.length) {
+        const qData = briefingQuestions[currentQIndex];
+        
+        // Append AI bubble
+        const aiBubble = document.createElement("div");
+        aiBubble.className = "chat-bubble ai";
+        aiBubble.innerText = qData.q;
+        chatStream.appendChild(aiBubble);
+        chatStream.scrollTop = chatStream.scrollHeight;
+
+        // Render quick reply chips
+        repliesBar.innerHTML = '';
+        qData.replies.forEach(txt => {
+          const btn = document.createElement("button");
+          btn.type = "button";
+          btn.className = "quick-chip";
+          btn.innerText = txt;
+          btn.onclick = () => answerQuestion(txt);
+          repliesBar.appendChild(btn);
+        });
+      } else {
+        // Complete -> go to Step B (dossier)
+        repliesBar.innerHTML = '';
+        const finalBubble = document.createElement("div");
+        finalBubble.className = "chat-bubble ai";
+        finalBubble.style.borderColor = "#D4AF37";
+        finalBubble.innerHTML = "✨ <strong>Excelente!</strong> Briefing completo coletado. Gerando seu dossiê estruturado agora...";
+        chatStream.appendChild(finalBubble);
+        chatStream.scrollTop = chatStream.scrollHeight;
+
+        setTimeout(() => {
+          populateDossier();
+          goToScreen("screen-op1-b");
+        }, 900);
+      }
+    }
+
+    function answerQuestion(answerText) {
+      const chatStream = document.getElementById("chat-stream");
+      const qData = briefingQuestions[currentQIndex];
+
+      // Save into dossierData (in-memory only)
+      if (qData) {
+        dossierData[qData.id] = answerText;
+      }
+
+      // Append user bubble
+      const userBubble = document.createElement("div");
+      userBubble.className = "chat-bubble user";
+      userBubble.innerText = answerText;
+      chatStream.appendChild(userBubble);
+      chatStream.scrollTop = chatStream.scrollHeight;
+
+      currentQIndex++;
+      setTimeout(renderChatQuestion, 400);
+    }
+
+    function handleUserSubmit(e) {
+      e.preventDefault();
+      const input = document.getElementById("chat-text-input");
+      const val = input.value.trim();
+      if (!val) return;
+      input.value = '';
+      answerQuestion(val);
+    }
+
+    function populateDossier() {
+      const randomProtocol = Math.floor(1000 + Math.random() * 9000);
+      const protoEl = document.getElementById("dossier-protocol");
+      if (protoEl) protoEl.innerText = `Dossiê Estruturado · #EV-${randomProtocol}`;
+
+      const badge = document.getElementById("dossier-badge");
+      if (badge) {
+        badge.style.background = "rgba(46, 204, 113, 0.14)";
+        badge.style.borderColor = "rgba(46, 204, 113, 0.35)";
+        badge.style.color = "#48E084";
+        badge.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg> Salvo no banco de dados`;
+      }
+
+      document.getElementById("dossier-tipo").innerText = dossierData.tipo || "Casamento";
+      document.getElementById("dossier-data").innerText = dossierData.data || "Novembro / 2025";
+      document.getElementById("dossier-local").innerText = dossierData.local || "Chácara / Ao ar livre";
+      document.getElementById("dossier-convidados").innerText = dossierData.convidados || "120 pessoas";
+      document.getElementById("dossier-estilo").innerText = dossierData.estilo || "Romântico & Floral";
+      document.getElementById("dossier-cores").innerText = dossierData.cores || "Branco e Ouro";
+      document.getElementById("dossier-ref").innerText = `"${dossierData.ref || 'Arranjos e velas especiais'}"`;
+      document.getElementById("dossier-inv").innerText = dossierData.investimento || "Sob medida";
+
+      populateWhatsAppMock();
+      populateDecoratorPanel();
+    }
+
+    function populateWhatsAppMock() {
+      const waArea = document.getElementById("wa-chat-area");
+      if (!waArea) return;
+
+      const tipo = dossierData.tipo || "Casamento";
+      const conv = dossierData.convidados || "120 pessoas";
+      const estilo = dossierData.estilo || "Romântico & Floral";
+      const ref = dossierData.ref || "detalhes florais especiais";
+
+      waArea.innerHTML = `
+        <div class="wa-msg system">
+          Olá! Aqui está o resumo do seu pré-atendimento para o <strong>${tipo} (${conv})</strong> em estilo <strong>${estilo}</strong> com referências em <em>"${ref}"</em>. Podemos confirmar esses dados para o decorador responsável?
+          <div class="wa-time">14:32 ✓✓</div>
+        </div>
+        <div class="wa-msg client">
+          Tudo certo! As informações estão perfeitas, ansiosa pela proposta da cenografia.
+          <div class="wa-time">14:33</div>
+        </div>
+        <div class="wa-msg system">
+          Perfeito! Seus dados foram validados e o decorador já está com seu projeto em mãos. Entraremos em contato em breve!
+          <div class="wa-time">14:33 ✓✓</div>
+        </div>
+      `;
+    }
+
+    function populateDecoratorPanel() {
+      const name = document.getElementById("lead-name");
+      if (name) name.innerText = "Camila & Gabriel";
+
+      const desc = document.getElementById("lead-desc");
+      if (desc) desc.innerText = `${dossierData.tipo || 'Casamento'} · ${dossierData.convidados || '120 convidados'}`;
+
+      const status = document.getElementById("lead-status");
+      if (status) {
+        status.innerText = "Pronto para contato";
+        status.style.opacity = "1";
+        status.style.background = "rgba(46, 204, 113, 0.15)";
+        status.style.color = "#44DE80";
+        status.style.borderColor = "rgba(46, 204, 113, 0.35)";
+      }
+
+      const sum = document.getElementById("lead-summary-text");
+      if (sum) {
+        sum.innerText = `Ficha validada por WhatsApp com briefing completo de estilo ${dossierData.estilo || 'Romântico/Floral'}, paleta definida e referências afetivas gravadas. Zero perda de tempo coletando dados básicos.`;
+      }
+    }
+
+    function simulateContactLead() {
+      alert("✅ Conexão iniciada! O decorador abre diretamente o WhatsApp ou discador do cliente com todos os dados preenchidos.");
+    }
+
+    /* ----------------------------------------------------
+       SLIDER ENGINE (Touch + Mouse Pointer Events)
+       ---------------------------------------------------- */
+    function setupSlider(containerId, afterPaneId, handleId) {
+      const container = document.getElementById(containerId);
+      const afterPane = document.getElementById(afterPaneId);
+      const handle = document.getElementById(handleId);
+
+      if (!container || !afterPane || !handle) return;
+
+      let isDragging = false;
+
+      function updatePosition(clientX) {
+        const rect = container.getBoundingClientRect();
+        let offsetX = clientX - rect.left;
+        if (offsetX < 10) offsetX = 10;
+        if (offsetX > rect.width - 10) offsetX = rect.width - 10;
+
+        const pct = (offsetX / rect.width) * 100;
+        afterPane.style.width = pct + "%";
+        handle.style.left = pct + "%";
+      }
+
+      // Initial 50%
+      afterPane.style.width = "50%";
+      handle.style.left = "50%";
+
+      // Pointer event listeners
+      container.addEventListener("pointerdown", (e) => {
+        isDragging = true;
+        container.setPointerCapture(e.pointerId);
+        updatePosition(e.clientX);
+      });
+
+      container.addEventListener("pointermove", (e) => {
+        if (!isDragging) return;
+        updatePosition(e.clientX);
+      });
+
+      container.addEventListener("pointerup", (e) => {
+        if (!isDragging) return;
+        isDragging = false;
+        try { container.releasePointerCapture(e.pointerId); } catch (_) {}
+      });
+
+      container.addEventListener("pointercancel", () => {
+        isDragging = false;
+      });
+    }
+
+    /* ----------------------------------------------------
+       OPORTUNIDADE 2: TOKENS & VARIATIONS LOGIC
+       ---------------------------------------------------- */
+    function generateVariation() {
+      const fb = document.getElementById("tokenFeedback");
+      if (currentTokens < 2) {
+        fb.style.display = "block";
+        fb.style.color = "#FF7A7A";
+        fb.innerText = "Saldo insuficiente. Recarregue seus tokens para gerar novas variações.";
+        return;
+      }
+
+      currentTokens -= 2;
+      document.getElementById("tokenVal").innerText = currentTokens;
+
+      // Cycle variations
+      currentVariationIndex = (currentVariationIndex + 1) % afterVariations.length;
+      const currentVar = afterVariations[currentVariationIndex];
+
+      // Update scenes
+      document.getElementById("svgAfterContainer").innerHTML = currentVar.svg;
+      document.getElementById("svgAfterMini").innerHTML = currentVar.svg;
+      document.getElementById("cleanRenderContainer").innerHTML = currentVar.svg;
+      document.getElementById("currentStyleTag").innerText = `DEPOIS · ${currentVar.name}`;
+
+      // Show feedback
+      fb.style.display = "block";
+      fb.style.color = "#E2C366";
+      fb.innerText = `✨ Variação "${currentVar.name}" gerada (-2 tokens). ${currentTokens} tokens restantes.`;
+
+      if (currentTokens <= 4) {
+        setTimeout(() => {
+          fb.innerText = `Aviso: Saldo baixo (${currentTokens} tokens). Toque em 'Recarregar tokens' quando desejar.`;
+        }, 2200);
+      }
+    }
+
+    function openRechargeModal() {
+      document.getElementById("rechargeModal").classList.add("active");
+    }
+
+    function closeRechargeModal() {
+      document.getElementById("rechargeModal").classList.remove("active");
+    }
+
+    function closeRechargeOnBackdrop(e) {
+      if (e.target.id === "rechargeModal") {
+        closeRechargeModal();
+      }
+    }
+
+    /* ----------------------------------------------------
+       LIGHTBOX (WITH OR WITHOUT WATERMARK)
+       ---------------------------------------------------- */
+    function openLightbox(withWatermark) {
+      const modal = document.getElementById("lightboxModal");
+      const viewContainer = document.getElementById("lightboxViewContainer");
+      const wm = document.getElementById("lightboxWatermark");
+      const caption = document.getElementById("lightboxCaption");
+      const currentVar = afterVariations[currentVariationIndex];
+
+      // Clean out existing SVG while keeping watermark
+      const oldSvg = viewContainer.querySelector("svg");
+      if (oldSvg) oldSvg.remove();
+
+      // Insert active variation svg
+      const wrapper = document.createElement("div");
+      wrapper.innerHTML = currentVar.svg;
+      const newSvg = wrapper.firstElementChild;
+      viewContainer.insertBefore(newSvg, wm);
+
+      if (withWatermark) {
+        wm.style.display = "flex";
+        caption.innerText = `Pré-visualização do Cliente (${currentVar.name}) · Com Marca d'Água`;
+      } else {
+        wm.style.display = "none";
+        caption.innerText = `Visão do Decorador (${currentVar.name}) · Sem Marca d'Água`;
+      }
+
+      modal.classList.add("active");
+    }
+
+    function closeLightbox() {
+      document.getElementById("lightboxModal").classList.remove("active");
+    }
+
+    function closeLightboxOnBackdrop(e) {
+      if (e.target.id === "lightboxModal") {
+        closeLightbox();
+      }
+    }
+  </script>
+<script>
+/* Skip artifact shell — fixed helpers served beside every artifact. */
+(function () {
+  "use strict";
+
+  var fmt = {
+    num: function (v, opts) { return new Intl.NumberFormat("pt-BR", opts || {}).format(v); },
+    brl: function (v) { return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(v); },
+    pct: function (v) { return new Intl.NumberFormat("pt-BR", { style: "percent", maximumFractionDigits: 1 }).format(v); }
+  };
+
+  // axisFmt keeps axis tick labels short (compact notation) so long values
+  // (e.g. full BRL amounts) never clip against the plot edge.
+  function axisFmt(v) {
+    return fmt.num(v, { notation: "compact", maximumFractionDigits: 1 });
+  }
+
+  // format accepts a function OR one of the fmt names ("num" | "brl" | "pct").
+  function coerceFormat(spec) {
+    if (typeof spec === "function") return spec;
+    if (typeof spec === "string" && fmt[spec]) return fmt[spec];
+    return function (v) { return fmt.num(v); };
+  }
+
+  function accent() {
+    return getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#2563eb";
+  }
+  function mutedColor() {
+    return getComputedStyle(document.documentElement).getPropertyValue("--text-muted").trim() || "#5b6472";
+  }
+  function svgEl(tag, attrs) {
+    var el = document.createElementNS("http://www.w3.org/2000/svg", tag);
+    for (var k in attrs) el.setAttribute(k, attrs[k]);
+    return el;
+  }
+  function frame(el, w, h) {
+    var svg = svgEl("svg", { viewBox: "0 0 " + w + " " + h, role: "img" });
+    el.innerHTML = "";
+    el.appendChild(svg);
+    return svg;
+  }
+
+  // maxOf guards the axis scale: empty values would give -Infinity (truthy,
+  // so "|| 1" can't catch it) and a non-positive max would flip the chart.
+  function maxOf(values) {
+    var m = values.length ? Math.max.apply(null, values) : 0;
+    return m > 0 ? m : 1;
+  }
+
+  // bar(el, {labels:[], values:[], color?, format?}) — vertical bar chart.
+  function bar(el, cfg) {
+    var W = 640, H = 280, padL = 46, padB = 30, padT = 12;
+    var svg = frame(el, W, H);
+    var max = maxOf(cfg.values);
+    var n = cfg.values.length;
+    var plotW = W - padL - 12, plotH = H - padT - padB;
+    var step = plotW / n, bw = Math.min(step * 0.62, 64);
+    var color = cfg.color || accent();
+    var f = coerceFormat(cfg.format);
+    for (var g = 0; g <= 4; g++) {
+      var gy = padT + plotH - (plotH * g) / 4;
+      svg.appendChild(svgEl("line", { x1: padL, y1: gy, x2: W - 12, y2: gy, stroke: "currentColor", "stroke-opacity": 0.08 }));
+      var lbl = svgEl("text", { x: padL - 8, y: gy + 4, "text-anchor": "end", "font-size": 10, fill: mutedColor() });
+      lbl.textContent = axisFmt((max * g) / 4);
+      svg.appendChild(lbl);
+    }
+    cfg.values.forEach(function (v, i) {
+      var bh = Math.max(0, (v / max) * plotH);
+      var x = padL + i * step + (step - bw) / 2;
+      var y = padT + plotH - bh;
+      var r = svgEl("rect", { x: x, y: y, width: bw, height: bh, rx: 4, fill: color });
+      var t = svgEl("title", {});
+      t.textContent = cfg.labels[i] + ": " + f(v);
+      r.appendChild(t);
+      svg.appendChild(r);
+      var tx = svgEl("text", { x: x + bw / 2, y: H - 10, "text-anchor": "middle", "font-size": 11, fill: mutedColor() });
+      tx.textContent = cfg.labels[i];
+      svg.appendChild(tx);
+    });
+  }
+
+  // line(el, {labels:[], values:[], color?, format?}) — single-series line.
+  function line(el, cfg) {
+    var W = 640, H = 280, padL = 46, padB = 30, padT = 12;
+    var svg = frame(el, W, H);
+    var max = maxOf(cfg.values);
+    var n = cfg.values.length;
+    var plotW = W - padL - 16, plotH = H - padT - padB;
+    var color = cfg.color || accent();
+    var f = coerceFormat(cfg.format);
+    for (var g = 0; g <= 4; g++) {
+      var gy = padT + plotH - (plotH * g) / 4;
+      svg.appendChild(svgEl("line", { x1: padL, y1: gy, x2: W - 16, y2: gy, stroke: "currentColor", "stroke-opacity": 0.08 }));
+      var lbl = svgEl("text", { x: padL - 8, y: gy + 4, "text-anchor": "end", "font-size": 10, fill: mutedColor() });
+      lbl.textContent = axisFmt((max * g) / 4);
+      svg.appendChild(lbl);
+    }
+    var pts = cfg.values.map(function (v, i) {
+      var x = padL + (n === 1 ? plotW / 2 : (plotW * i) / (n - 1));
+      var y = padT + plotH - (v / max) * plotH;
+      return [x, y];
+    });
+    var d = pts.map(function (p, i) { return (i ? "L" : "M") + p[0].toFixed(1) + " " + p[1].toFixed(1); }).join(" ");
+    svg.appendChild(svgEl("path", { d: d, fill: "none", stroke: color, "stroke-width": 2, "stroke-linejoin": "round" }));
+    pts.forEach(function (p, i) {
+      var c = svgEl("circle", { cx: p[0], cy: p[1], r: 3.5, fill: color });
+      var t = svgEl("title", {});
+      t.textContent = cfg.labels[i] + ": " + f(cfg.values[i]);
+      c.appendChild(t);
+      svg.appendChild(c);
+      var tx = svgEl("text", { x: p[0], y: H - 10, "text-anchor": "middle", "font-size": 11, fill: mutedColor() });
+      tx.textContent = cfg.labels[i];
+      svg.appendChild(tx);
+    });
+  }
+
+  // donut(el, {labels:[], values:[], colors?}) — donut with center total.
+  function donut(el, cfg) {
+    var W = 320, H = 280, cx = W / 2, cy = H / 2, R = 92, r = 58;
+    var svg = frame(el, W, H);
+    var total = cfg.values.reduce(function (a, b) { return a + b; }, 0) || 1;
+    var palette = cfg.colors || [accent(), "#1baf7a", "#eda100", "#e34948", "#4a3aa7", "#e87ba4"];
+    var a0 = -Math.PI / 2;
+    cfg.values.forEach(function (v, i) {
+      var a1 = a0 + (v / total) * Math.PI * 2;
+      var large = a1 - a0 > Math.PI ? 1 : 0;
+      var p = ["M", cx + R * Math.cos(a0), cy + R * Math.sin(a0),
+        "A", R, R, 0, large, 1, cx + R * Math.cos(a1), cy + R * Math.sin(a1),
+        "L", cx + r * Math.cos(a1), cy + r * Math.sin(a1),
+        "A", r, r, 0, large, 0, cx + r * Math.cos(a0), cy + r * Math.sin(a0), "Z"].join(" ");
+      var path = svgEl("path", { d: p, fill: palette[i % palette.length] });
+      var t = svgEl("title", {});
+      t.textContent = cfg.labels[i] + ": " + fmt.num(v) + " (" + fmt.pct(v / total) + ")";
+      path.appendChild(t);
+      svg.appendChild(path);
+      a0 = a1;
+    });
+    var center = svgEl("text", { x: cx, y: cy + 5, "text-anchor": "middle", "font-size": 20, "font-weight": 650, fill: "currentColor" });
+    center.textContent = fmt.num(total);
+    svg.appendChild(center);
+  }
+
+  window.skipShell = { fmt: fmt };
+  window.skipChart = { bar: bar, line: line, donut: donut };
+})();
+
+</script>
+</body>
+</html>
